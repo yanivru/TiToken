@@ -100,43 +100,11 @@ bleUserCfg_t user0Cfg = BLE_USER_CFG;
 /*******************************************************************************
  * LOCAL VARIABLES
  */
-Swi_Struct swi0Struct;
-Swi_Handle swi0Handle;
-Semaphore_Struct semStruct;
-Semaphore_Handle semHandle;
-Task_Struct task1Struct;
-Char task1Stack[TASKSTACKSIZE];
 
-PIN_Config button1PinTable[] = {
-    Board_BUTTON0  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES,
-    PIN_TERMINATE
-};
-
-PIN_Config button2PinTable[] = {
-    Board_BUTTON1  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_BOTHEDGES,
-    PIN_TERMINATE
-};
-
-Char passwords[10][20] = {
-		"p01",
-		"p02",
-		"p03",
-		"p04",
-		"p05",
-		"p06",
-		"p07",
-		"p08",
-		"p09",
-		"p10"
-};
 
 /*******************************************************************************
  * GLOBAL VARIABLES
  */
-static PIN_Handle button1PinHandle;
-static PIN_Handle button2PinHandle;
-static PIN_State button1PinState;
-static PIN_State button2PinState;
 
 /*******************************************************************************
  * EXTERNS
@@ -146,48 +114,6 @@ static PIN_State button2PinState;
 extern void AssertHandler(uint8 assertCause, uint8 assertSubcause);
 
 extern Display_Handle dispHandle;
-
-
-void button1CallbackFxn(PIN_Handle handle, PIN_Id pinId) {
-	Swi_post(swi0Handle);
-}
-
-
-void button2CallbackFxn(PIN_Handle handle, PIN_Id pinId) {
-	Swi_post(swi0Handle);
-}
-
-Void swi0Fxn(UArg arg0, UArg arg1)
-{
-	Semaphore_post(semHandle);
-}
-
-Void task1Fxn(UArg arg0, UArg arg1)
-{
-	int requestedPasswordId = 0;
-	uint16_t len = 1;
-
-	while(1)
-	{
-		Semaphore_pend(semHandle, BIOS_WAIT_FOREVER);
-
-		TipasswordService_SetParameter(TS_USERNAME_ID, 8, "UserName");
-
-		if(PIN_getInputValue(Board_BUTTON0) == 0)
-		{
-			TipasswordService_GetParameter(TS_PASSWORDID_ID, &len, &requestedPasswordId);
-			TipasswordService_SetParameter(TS_PASSWORD_ID, 3, passwords[requestedPasswordId]);
-		}
-//		else
-//		{
-//			TipasswordService_SetParameter(TS_PASSWORD_ID, 1, " ");
-//		}
-
-        System_printf("Printing\n");
-        System_flush();
-	}
-}
-
 
 /*******************************************************************************
  * @fn          Main
@@ -206,54 +132,10 @@ Void task1Fxn(UArg arg0, UArg arg1)
  */
 int main()
 {
-//  Swi_Params swiParams;
-//  Task_Params taskParams;
-//  Semaphore_Params semParams;
-
   /* Register Application callback to trap asserts raised in the Stack */
   RegisterAssertCback(AssertHandler);
 
   PIN_init(BoardGpioInitTable);
-
-//  Task_Params_init(&taskParams);
-//  taskParams.stackSize = TASKSTACKSIZE;
-//  taskParams.stack = &task1Stack;
-//  taskParams.priority = 1;
-//  Task_construct(&task1Struct, (Task_FuncPtr)task1Fxn, &taskParams, NULL);
-
-//  Semaphore_Params_init(&semParams);
-//  Semaphore_construct(&semStruct, 0, &semParams);
-
-  /* Obtain instance handle */
-//  semHandle = Semaphore_handle(&semStruct);
-
-//  Swi_Params_init(&swiParams);
-//  swiParams.arg0 = 1;
-//  swiParams.arg1 = 0;
-//  swiParams.priority = 0;
-//  swiParams.trigger = 0;
-
-//  Swi_construct(&swi0Struct, (Swi_FuncPtr)swi0Fxn, &swiParams, NULL);
-//  swi0Handle = Swi_handle(&swi0Struct);
-
-//  button2PinHandle = PIN_open(&button2PinState, button2PinTable);
-//  if(!button2PinHandle) {
-//      System_abort("Error initializing button pins\n");
-//  }
-
-//  if (PIN_registerIntCb(button2PinHandle, &button2CallbackFxn) != 0) {
-//      System_abort("Error registering button callback function");
-//  }
-
-//  button1PinHandle = PIN_open(&button1PinState, button1PinTable);
-//  if(!button1PinHandle) {
-//      System_abort("Error initializing button pins\n");
-//  }
-
-//  if (PIN_registerIntCb(button1PinHandle, &button1CallbackFxn) != 0) {
-//      System_abort("Error registering button callback function");
-//  }
-
 
 #ifndef POWER_SAVING
   /* Set constraints for Standby, powerdown and idle mode */

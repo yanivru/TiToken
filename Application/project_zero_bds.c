@@ -46,6 +46,7 @@
 //#define xdc_runtime_Log_DISABLE_ALL 1  // Add to disable logs from this file
 
 #include <ti/sysbios/knl/Task.h>
+#include <ti/sysbios/knl/Swi.h>
 #include <ti/sysbios/knl/Semaphore.h>
 #include <ti/sysbios/knl/Queue.h>
 #include <xdc/runtime/System.h>
@@ -118,6 +119,13 @@ typedef enum
   APP_MSG_SEND_PASSCODE,       /* A pass-code/PIN is requested during pairing */
 } app_msg_types_t;
 
+typedef enum
+{
+	NotApproved = 0,
+	PendingApproval,
+	Approved
+} client_state_t;
+
 // Struct for messages sent to the application task
 typedef struct
 {
@@ -154,6 +162,34 @@ typedef struct
 /*********************************************************************
  * LOCAL VARIABLES
  */
+
+Char passwords[10][20] = {
+		"p01",
+		"p02",
+		"p03",
+		"p04",
+		"p05",
+		"p06",
+		"p07",
+		"p08",
+		"p09",
+		"p10"
+};
+
+int passwordIndex;
+
+PIN_Config button2PinTable[] = {
+    Board_BUTTON1  | PIN_INPUT_EN | PIN_PULLUP | PIN_IRQ_POSEDGE,
+    PIN_TERMINATE
+};
+
+static PIN_Handle button2PinHandle;
+static PIN_State button2PinState;
+
+static Swi_Struct swi0Struct;
+static Swi_Handle swi0Handle;
+
+static client_state_t client_state = NotApproved;
 
 // Entity ID globally used to check for source and/or destination of messages
 static ICall_EntityID selfEntity;
@@ -315,6 +351,41 @@ void ProjectZero_createTask(void)
   Task_construct(&przTask, ProjectZero_taskFxn, &taskParams, NULL);
 }
 
+void button2CallbackFxn(PIN_Handle handle, PIN_Id pinId) {
+	Swi_post(swi0Handle);
+}
+
+static Void swi0Fxn(UArg arg0, UArg arg1)
+{
+    client_state = Approved;
+    user_enqueueCharDataMsg(APP_MSG_UPDATE_CHARVAL, 0xFFFF, TIPASSWORD_SERVICE_SERV_UUID, TS_USERNAME_ID, "My name", 3);
+}
+
+
+static void InitButton()
+{
+  Swi_Params swiParams;
+
+  Swi_Params_init(&swiParams);
+  swiParams.arg0 = 1;
+  swiParams.arg1 = 0;
+  swiParams.priority = 0;
+  swiParams.trigger = 0;
+
+  Swi_construct(&swi0Struct, (Swi_FuncPtr)swi0Fxn, &swiParams, NULL);
+  swi0Handle = Swi_handle(&swi0Struct);
+
+  button2PinHandle = PIN_open(&button2PinState, button2PinTable);
+  if(!button2PinHandle) {
+      System_abort("Error initializing button pins\n");
+  }
+
+  if (PIN_registerIntCb(button2PinHandle, &button2CallbackFxn) != 0) {
+      System_abort("Error registering button callback function");
+  }
+}
+
+
 /*
  * @brief   Called before the task loop and contains application-specific
  *          initialization of the BLE stack, hardware setup, power-state
@@ -461,8 +532,9 @@ static void ProjectZero_init(void)
 
   // Register for GATT local events and ATT Responses pending for transmission
   GATT_RegisterForMsgs(selfEntity);
-}
 
+  InitButton();
+}
 
 /*
  * @brief   Application task entry point.
@@ -673,6 +745,10 @@ static void user_processGapStateChangeEvt(gaprole_States_t newState)
       {
         uint8_t peerAddress[B_ADDR_LEN];
 
+        client_state = PendingApproval;
+        user_enqueueCharDataMsg(APP_MSG_UPDATE_CHARVAL, 0xFFFF, TIPASSWORD_SERVICE_SERV_UUID, TS_USERNAME_ID, " ", 1);
+        user_enqueueCharDataMsg(APP_MSG_UPDATE_CHARVAL, 0xFFFF, TIPASSWORD_SERVICE_SERV_UUID, TS_PASSWORD_ID, " ", 1);
+
         GAPRole_GetParameter(GAPROLE_CONN_BD_ADDR, peerAddress);
 
         char *cstr_peerAddress = Util_convertBdAddr2Str(peerAddress);
@@ -745,6 +821,12 @@ void user_TipasswordService_ValueChangeHandler(char_data_t *pCharData)
 
       // Do something useful with pCharData->data here
       // -------------------------
+      passwordIndex = pCharData->data[0];
+      if(client_state == Approved)
+      {
+    	  user_enqueueCharDataMsg(APP_MSG_UPDATE_CHARVAL, 0xFFFF, TIPASSWORD_SERVICE_SERV_UUID, TS_PASSWORD_ID, passwords[passwordIndex], 3);
+      	  client_state = PendingApproval;
+      }
       break;
 
   default:
@@ -794,10 +876,10 @@ void user_TipasswordService_CfgChangeHandler(char_data_t *pCharData)
       // Do something useful with configValue here. It tells you whether someone
       // wants to know the state of this characteristic.
       // ... In the generated example we turn periodic clocks on/off
-      if (configValue) // 0x0001 and 0x0002 both indicate turned on.
-        Clock_start((Clock_Handle)&ts_Password_clock);
-      else
-        Clock_stop((Clock_Handle)&ts_Password_clock);
+//      if (configValue) // 0x0001 and 0x0002 both indicate turned on.
+//        Clock_start((Clock_Handle)&ts_Password_clock);
+//      else
+//        Clock_stop((Clock_Handle)&ts_Password_clock);
       break;
 
     case TS_USERNAME_ID:
@@ -809,10 +891,10 @@ void user_TipasswordService_CfgChangeHandler(char_data_t *pCharData)
       // Do something useful with configValue here. It tells you whether someone
       // wants to know the state of this characteristic.
       // ... In the generated example we turn periodic clocks on/off
-      if (configValue) // 0x0001 and 0x0002 both indicate turned on.
-        Clock_start((Clock_Handle)&ts_UserName_clock);
-      else
-        Clock_stop((Clock_Handle)&ts_UserName_clock);
+//      if (configValue) // 0x0001 and 0x0002 both indicate turned on.
+//        Clock_start((Clock_Handle)&ts_UserName_clock);
+//      else
+//        Clock_stop((Clock_Handle)&ts_UserName_clock);
       break;
 
   default:
